@@ -1,3 +1,610 @@
+* Enumeration
+** reference
+
+*** enum to string in modern C++ and future C++17
+http://stackoverflow.com/questions/28828957/enum-to-string-in-modern-c-and-future-c17
+
+**** A1
+Just generate your enums. Writing a generator for that purpose is about five minutes' work.
+
+Generator code in java and python, super easy to port to any language you like, including C++.
+
+Also super easy to extend by whatever functionality you want.
+
+example input:
+
+First = 5
+Second
+Third = 7
+Fourth
+Fifth=11
+
+
+generated header:
+
+#include <iosfwd>
+
+enum class Hallo
+{
+    First = 5,
+    Second = 6,
+    Third = 7,
+    Fourth = 8,
+    Fifth = 11
+};
+
+std::ostream & operator << (std::ostream &, const Hallo&);
+
+
+generated cpp file
+
+#include <ostream>
+#include "Hallo.h"
+
+std::ostream & operator << (std::ostream& out, const Hallo& value)
+{
+    switch(value)
+    {
+    case Hallo::First:
+        out << "First";
+        break;
+    case Hallo::Second:
+        out << "Second";
+        break;
+    case Hallo::Third:
+        out << "Third";
+        break;
+    case Hallo::Fourth:
+        out << "Fourth";
+        break;
+    case Hallo::Fifth:
+        out << "Fifth";
+        break;
+    default:
+        out << "<unknown>";
+    }
+
+    return out;
+}
+
+
+And the generator, in a very terse form as a template for porting and extension.
+This example code really tries to avoid overwriting any files but still use it at your own risk.
+
+package cppgen;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.Charset;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class EnumGenerator
+{
+    static void fail(String message)
+    {
+        System.err.println(message);
+        System.exit(1);
+    }
+
+    static void run(String[] args)
+    throws Exception
+    {
+        Pattern pattern = Pattern.compile("\\s*(\\w+)\\s*(?:=\\s*(\\d+))?\\s*", Pattern.UNICODE_CHARACTER_CLASS);
+        Charset charset = Charset.forName("UTF8");
+        String tab = "    ";
+
+        if (args.length != 3)
+        {
+            fail("Required arguments: <enum name> <input file> <output dir>");
+        }
+
+        String enumName = args[0];
+
+        File inputFile = new File(args[1]);
+
+        if (inputFile.isFile() == false)
+        {
+            fail("Not a file: [" + inputFile.getCanonicalPath() + "]");
+        }
+
+        File outputDir = new File(args[2]);
+
+        if (outputDir.isDirectory() == false)
+        {
+            fail("Not a directory: [" + outputDir.getCanonicalPath() + "]");
+        }
+
+        File headerFile = new File(outputDir, enumName + ".h");
+        File codeFile = new File(outputDir, enumName + ".cpp");
+
+        for (File file : new File[] { headerFile, codeFile })
+        {
+            if (file.exists())
+            {
+                fail("Will not overwrite file [" + file.getCanonicalPath() + "]");
+            }
+        }
+
+        int nextValue = 0;
+
+        Map<String, Integer> fields = new LinkedHashMap<>();
+
+        try
+        (
+            BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(inputFile), charset));
+        )
+        {
+            while (true)
+            {
+                String line = reader.readLine();
+
+                if (line == null)
+                {
+                    break;
+                }
+
+                if (line.trim().length() == 0)
+                {
+                    continue;
+                }
+
+                Matcher matcher = pattern.matcher(line);
+
+                if (matcher.matches() == false)
+                {
+                    fail("Syntax error: [" + line + "]");
+                }
+
+                String fieldName = matcher.group(1);
+
+                if (fields.containsKey(fieldName))
+                {
+                    fail("Double fiend name: " + fieldName);
+                }
+
+                String valueString = matcher.group(2);
+
+                if (valueString != null)
+                {
+                    int value = Integer.parseInt(valueString);
+
+                    if (value < nextValue)
+                    {
+                        fail("Not a monotonous progression from " + nextValue + " to " + value + " for enum field " + fieldName);
+                    }
+
+                    nextValue = value;
+                }
+
+                fields.put(fieldName, nextValue);
+
+                ++nextValue;
+            }
+        }
+
+        try
+        (
+            PrintWriter headerWriter = new PrintWriter(new OutputStreamWriter(new FileOutputStream(headerFile), charset));
+            PrintWriter codeWriter = new PrintWriter(new OutputStreamWriter(new FileOutputStream(codeFile), charset));
+        )
+        {
+            headerWriter.println();
+            headerWriter.println("#include <iosfwd>");
+            headerWriter.println();
+            headerWriter.println("enum class " + enumName);
+            headerWriter.println('{');
+            boolean first = true;
+            for (Entry<String, Integer> entry : fields.entrySet())
+            {
+                if (first == false)
+                {
+                    headerWriter.println(",");
+                }
+
+                headerWriter.print(tab + entry.getKey() + " = " + entry.getValue());
+
+                first = false;
+            }
+            if (first == false)
+            {
+                headerWriter.println();
+            }
+            headerWriter.println("};");
+            headerWriter.println();
+            headerWriter.println("std::ostream & operator << (std::ostream &, const " + enumName + "&);");
+            headerWriter.println();
+
+            codeWriter.println();
+            codeWriter.println("#include <ostream>");
+            codeWriter.println();
+            codeWriter.println("#include \"" + enumName + ".h\"");
+            codeWriter.println();
+            codeWriter.println("std::ostream & operator << (std::ostream &out, const " + enumName + "&value)");
+            codeWriter.println('{');
+            codeWriter.println(tab + "switch(value)");
+            codeWriter.println(tab + '{');
+            first = true;
+            for (Entry<String, Integer> entry : fields.entrySet())
+            {
+                codeWriter.println(tab + "case " + enumName + "::" + entry.getKey() + ':');
+                codeWriter.println(tab + tab + "out << \"" + entry.getKey() + "\";");
+                codeWriter.println(tab + tab + "break;");
+
+                first = false;
+            }
+            codeWriter.println(tab + "default:");
+            codeWriter.println(tab + tab + "out << \"<unknown>\";");
+            codeWriter.println(tab + '}');
+            codeWriter.println();
+            codeWriter.println(tab + "return out;");
+            codeWriter.println('}');
+            codeWriter.println();
+        }
+    }
+
+    public static void main(String[] args)
+    {
+        try
+        {
+            run(args);
+        }
+        catch(Exception exc)
+        {
+            exc.printStackTrace();
+            System.exit(1);
+        }
+    }
+}
+
+
+And a port to Python 3.5 because different enough to be potentially helpful
+
+import re
+import collections
+import sys
+import io
+import os
+
+def fail(*args):
+    print(*args)
+    exit(1)
+
+pattern = re.compile(r'\s*(\w+)\s*(?:=\s*(\d+))?\s*')
+tab = "    "
+
+if len(sys.argv) != 4:
+    n=0
+    for arg in sys.argv:
+        print("arg", n, ":", arg, " / ", sys.argv[n])
+        n += 1
+    fail("Required arguments: <enum name> <input file> <output dir>")
+
+enumName = sys.argv[1]
+
+inputFile = sys.argv[2]
+
+if not os.path.isfile(inputFile):
+    fail("Not a file: [" + os.path.abspath(inputFile) + "]")
+
+outputDir = sys.argv[3]
+
+if not os.path.isdir(outputDir):
+    fail("Not a directory: [" + os.path.abspath(outputDir) + "]")
+
+headerFile = os.path.join(outputDir, enumName + ".h")
+codeFile = os.path.join(outputDir, enumName + ".cpp")
+
+for file in [ headerFile, codeFile ]:
+    if os.path.exists(file):
+        fail("Will not overwrite file [" + os.path.abspath(file) + "]")
+
+nextValue = 0
+
+fields = collections.OrderedDict()
+
+for line in open(inputFile, 'r'):
+    line = line.strip()
+
+    if len(line) == 0:
+        continue
+
+    match = pattern.match(line)
+
+    if match == None:
+        fail("Syntax error: [" + line + "]")
+
+    fieldName = match.group(1)
+
+    if fieldName in fields:
+        fail("Double field name: " + fieldName)
+
+    valueString = match.group(2)
+
+    if valueString != None:
+        value = int(valueString)
+
+        if value < nextValue:
+            fail("Not a monotonous progression from " + nextValue + " to " + value + " for enum field " + fieldName)
+
+        nextValue = value
+
+    fields[fieldName] = nextValue
+
+    nextValue += 1
+
+headerWriter = open(headerFile, 'w')
+codeWriter = open(codeFile, 'w')
+
+try:
+    headerWriter.write("\n")
+    headerWriter.write("#include <iosfwd>\n")
+    headerWriter.write("\n")
+    headerWriter.write("enum class " + enumName + "\n")
+    headerWriter.write("{\n")
+    first = True
+    for fieldName, fieldValue in fields.items():
+        if not first:
+            headerWriter.write(",\n")
+
+        headerWriter.write(tab + fieldName + " = " + str(fieldValue))
+
+        first = False
+    if not first:
+        headerWriter.write("\n")
+    headerWriter.write("};\n")
+    headerWriter.write("\n")
+    headerWriter.write("std::ostream & operator << (std::ostream &, const " + enumName + "&);\n")
+    headerWriter.write("\n")
+
+    codeWriter.write("\n")
+    codeWriter.write("#include <ostream>\n")
+    codeWriter.write("\n")
+    codeWriter.write("#include \"" + enumName + ".h\"\n")
+    codeWriter.write("\n")
+    codeWriter.write("std::ostream & operator << (std::ostream &out, const " + enumName + "&value)\n")
+    codeWriter.write("{\n")
+    codeWriter.write(tab + "switch(value)\n")
+    codeWriter.write(tab + "{\n")
+    for fieldName in fields.keys():
+        codeWriter.write(tab + "case " + enumName + "::" + fieldName + ":\n")
+        codeWriter.write(tab + tab + "out << \"" + fieldName + "\";\n")
+        codeWriter.write(tab + tab + "break;\n")
+    codeWriter.write(tab + "default:\n")
+    codeWriter.write(tab + tab + "out << \"<unknown>\";\n")
+    codeWriter.write(tab + "}\n")
+    codeWriter.write("\n")
+    codeWriter.write(tab + "return out;\n")
+    codeWriter.write("}\n")
+    codeWriter.write("\n")
+finally:
+    headerWriter.close()
+    codeWriter.close()
+shareeditflag
+edited May 30 at 4:08
+answered May 28 at 10:05
+
+yeoman
+40135
+
+
+Thank you very much for sharing your generator in two languages :-) But do you have any idea how to generate at compile-time? For instance, can we imagine translating your generator using CMake statements in order to refresh the C++ generated code when input data is changed? My dream is to force the C++ compiler to generate enums at compilation using meta-programming (variadic template class and constexpr functions). – olibre Jun 7 at 19:28
+
+
+There are many ways to integrate steps into cmake :) – yeoman Jun 8 at 10:17
+
+
+stackoverflow.com/questions/18427877/… – yeoman Jun 8 at 10:17
+
+
+Otoh, in case it's too cumbersome to add a custom cmake command, you can automate your IDE or call the gererator manually and have the output in source control. It's sometimes a good idea to have generated code in source control anyway, as long it's not too much, and people understand that they're not supposed to make manual changes, because it's sometimes interesting to look at the history of the generated files when you're debugging something weird and have the suspicion that a recent change to the generator may have broken something :) – yeoman Jun 8 at 10:21
+
+
+About generating things at compile time, that's so easy in LISP because the syntax is so extremely clean and easy. That's helped by the fact that it's dynamically typed, which allows it to be terse and readable without much syntax. The equivalent of LISP macros in C++ would need a very complicated way to describe the AST of what you're trying to generate. And an AST for C++ is never pretty :( – yeoman Jun 8 at 10:24
+
+
+Directly in Make instead of cmake, it's super easy btw. Just generate .h and .cpp targets for each .enum file via find, and have these targets depend on said enum defs, so they're automatically re-generated once the .enum def files change. It's probably a lot easier in cmake because it's full of magic for this kind of things but I regularly use Make, ant, and gradle, but only have limited knowledge of Maven, cmake, and grunt :) – yeoman Jun 8 at 10:33
+
+
+Thanks for your answer :-) I think most of the C++ developers will appreciate if your generator could detect enums directly within C++ code like enum class Hallo{ First=5, Second=6, Third=7, Fourth=8}; or in several lines :-D Do you think you can adapt your generator in order to detect an enum within a C++ file? The best could be to generate code only on detection of a tag like /*<Generate enum to string here>*/. Then your generator writes in-place the corresponding C++ generated code (replacing the previous generated code). ^_^ What an awesome generator isn't it? Cheers :-) – olibre Jun 8 at 21:22
+
+
+Replacing code in place is generally a bad idea. What if you decide to add twenty new enum fields? then this input is lost because it was overwritten. plus, when you attempt to make it SMART, leaving the input inn place and adding the generated code right beneath it, and replace your generated code by the newly generated code in case of a change on the input, you can bet that sooner or later something will go wrong and your generator deletes some code it wasn't supposed to -.- – yeoman Jun 10 at 6:32
+
+
+If having a text file in your project that is not C++ source is unacceptable to you, and you get paid for your time and not for the actual work you get done, I suggest manually writing the equivalent manual enums. But don't forget to write a couple of unit tests for each one so you don't accidentally build in the typical copy & paste errors :) – yeoman Jun 10 at 6:37
+
+
+Thank you for your feedback :-) +1 You are right, changing content of a C++ source file is not a good idea (for example, the file could be read-only). Therefore, the generated code should be somewhere with the other generated files (e.g. *.o files). Using your idea, the build tool chain (Makefile or CMake or ...) may call an external module (in Java or Python...) to detect the enums directly within the C++ code and generate the corresponding enum_to_string functions. Your code may evolve to use clang-parser in order to understand the C++ source Abstract Syntax Tree (AST)... Cheers – olibre Jun 10 at 11:48
+
+
+That adds a lot of complexity and comes at a high price. C++ code is easy to debug. An object file without real source is not -.- – yeoman Jun 10 at 17:20
+
+
+Btw. what is the problem with having source files in a simple generator input language that automatically are built into generated C++ source files that are then compiled via the C++ compiler, all automatically? What is the pain point there for you? :):) – yeoman Jun 10 at 17:23
+
+
+Sorry about the confusion on generated C++ and object files. I mean the generated C++ files must be written in a read/write directory. And the object files must also be written in read/write directories. Generated C++ files should not be written along the input C++ files (e.g. the directory could be read-only). My conclusion is the generated C++ files should be written in similar directory tree as the object files. Like object files, these generated C++ files are temporaries. On my opinion, all these temporaries should be all removed on full cleanup. – olibre Jun 10 at 21:49
+
+
+Imagine two tools to generate C++. Both tools are easy to use and reliable. The difference: (1) With the first tool, the developer writes pseudo enum code in a configuration file and the tool generates both enum and enum_to_string function. (2) With the second tool, the developer continues to write enum in C++ (within the right namespace/class), and the tool generates just the corresponding enum_to_string function. I think most developers will prefer the second tool. I do not say the first tool has a problem. I just think the second is more comfortable. Do you agree? – olibre Jun 10 at 22:07
+
+
+Yes, an extra directory for generated source files is a must :) I mostly call it "generated", and I generate a warning comment on top of every generated source file that states that it's going to be overwritten :) – yeoman Jun 11 at 5:17
+
+
+If the enum is a C++ enum class, then yes, you can write it in a header file. But you still need information about the name of the generated header and source file and the header file to read the enum from etc. in the config, so you end up with two sources, plus the resulting enum is then spread across several files, and the extra header file must be included manually because the generator won't touch any of your manual code files. – yeoman Jun 11 at 5:21
+
+
+If, otoh, the enum is in fact a typesafe enum class with all kinds of potential extra functionality built in, you want all of it generated in any case because the header itself then contains a lot of boilerplate. I usually use this approach, and I also generate lots of other things like structs, connection classes &c. for several platforms (C++, Java, Python, C#, Objective-C, Swift), so I work with extra IDL files in any case, and the enums live there with everything else, and that feels quite natural to me by now :) – yeoman Jun 11 at 5:24
+
+
+For C++ enums, and enums only, with extra header files for enum support functions, I think working with the llvm to get at the AST is a bad idea because not only is the llvm a really large code base but it's also a MESS. I've rarely seen less readable code than in the llvm. – yeoman Jun 11 at 5:31
+
+
+Plus, there's a world beyond the llvm, and enum classes are sufficiently easy to parse with simple regex, especially with a helper comment containing all information for the genrator so there is NO extra config file (important in this case I think, because single source is always a great idea), and Python does everything, independent of the llvm, so you can even do it in Windows or in a classic gcc setup (and I really dislike using several compilers at once) :) – yeoman Jun 11 at 5:31
+
+
+So in a setting with C++ enums, your idea wins, but with python, and there's no extra config file :) – yeoman Jun 11 at 5:32
+
+
+Thank you Yeoman for your explanations. You are right, moreover writing a generator reading a simple text input is a lot easier than from a complex C++ input (the C++ enum may be obfuscated by a #define MACRO). – olibre Jun 13 at 15:55
+
+
+But using Clang AST should not be so difficult. For example, Loïc has presented at C++ Paris meetup (C++FRUG) a tool to visualize the AST from a C++ code you paste in its left windows: Clang-ast-viewer. We could imagine that the code is generated only if the function std::string EnumX_to_string(EnumX) is declared. The generated filename *.cpp is deduced from the filename where this function is declared. No need to include it. I have enjoyed our constructive discussion ;-) Cheers – olibre Jun 13 at 15:55
+
+
+:):) using clang's AST is certainly far from hard or impossible. But compared to doing nothing at all because I happen to have my input IDLs and parsing tools up and running, it would indeed be a monumental effort of several days' work :) – yeoman Jun 15 at 9:34
+
+
+Btw. even though the code base of the llvm is a mess, it's still fascinating, and I truly recommend you have a look inside and maybe try to get your hands at the AST of an enum and try to create something from it. It'll be very insightful about how things actually work in the llvm in detail, how the sausage REALLY is made, behind the shiny facade with clang and swift and apple's marketing and the hype around it, which I found fascinating in unexpected ways, both glorious and terrifying :D – yeoman Jun 15 at 9:37
+
+
+Just out of curiosity - is Loïc a Breton name? :) – yeoman Jun 30 at 16:38
+
+As far as I think, all the Loïc I know come from Bretagne (or their parents). My colleagues at Paris think also Loïc is a Breton name. But after reading the article Loïc on Wikipedia, I see that Loïc may come from "old Provençal form of Louis" or from "Greek name Loukas"... Next time I will meet Loïc Joly I will ask him if his name is from Bretagne... – olibre Jul 1 at 8:03
+
+**** A2
+I had the same problem a couple of days ago. I couldn't find any C++ solution without some weird macro magic, so I decided to write a CMake code generator to generate simple switch case statements.
+
+Usage:
+
+enum2str_generate(
+  PATH          <path to place the files in>
+  CLASS_NAME    <name of the class (also prefix for the files)>
+  FUNC_NAME     <name of the (static) member function>
+  NAMESPACE     <the class will be inside this namespace>
+  INCLUDES      <LIST of files where the enums are defined>
+  ENUMS         <LIST of enums to process>
+  BLACKLIST     <LIST of constants to ignore>
+  USE_CONSTEXPR <whether to use constexpr or not (default: off)>
+  USE_C_STRINGS <whether to use c strings instead of std::string or not (default: off)>
+)
+The function searches the include files in the filesystem (uses the include directories provided with the include_directories command), reads them and does some regex to generate the class and the function(s).
+
+NOTE: constexpr implies inline in C++, so using the USE_CONSTEXPR option will generate a header only class!
+
+Example:
+
+./includes/a.h:
+
+enum AAA : char { A1, A2 };
+
+typedef enum {
+   VAL1          = 0,
+   VAL2          = 1,
+   VAL3          = 2,
+   VAL_FIRST     = VAL1,    // Ignored
+   VAL_LAST      = VAL3,    // Ignored
+   VAL_DUPLICATE = 1,       // Ignored
+   VAL_STRANGE   = VAL2 + 1 // Must be blacklisted
+} BBB;
+./CMakeLists.txt:
+
+include_directories( ${PROJECT_SOURCE_DIR}/includes ...)
+
+enum2str_generate(
+   PATH       "${PROJECT_SOURCE_DIR}"
+   CLASS_NAME "enum2Str"
+   NAMESPACE  "abc"
+   FUNC_NAME  "toStr"
+   INCLUDES   "a.h" # WITHOUT directory
+   ENUMS      "AAA" "BBB"
+   BLACKLIST  "VAL_STRANGE")
+Generates:
+
+./enum2Str.hpp:
+
+/*!
+  * \file enum2Str.hpp
+  * \warning This is an automatically generated file!
+  */
+
+#ifndef ENUM2STR_HPP
+#define ENUM2STR_HPP
+
+#include <string>
+#include <a.h>
+
+namespace abc {
+
+class enum2Str {
+ public:
+   static std::string toStr( AAA _var ) noexcept;
+   static std::string toStr( BBB _var ) noexcept;
+};
+
+}
+
+#endif // ENUM2STR_HPP
+./enum2Str.cpp:
+
+/*!
+  * \file enum2Str.cpp
+  * \warning This is an automatically generated file!
+  */
+
+#include "enum2Str.hpp"
+
+namespace abc {
+
+/*!
+ * \brief Converts the enum AAA to a std::string
+ * \param _var The enum value to convert
+ * \returns _var converted to a std::string
+ */
+std::string enum2Str::toStr( AAA _var ) noexcept {
+   switch ( _var ) {
+      case A1: return "A1";
+      case A2: return "A2";
+      default: return "<UNKNOWN>";
+   }
+}
+
+/*!
+ * \brief Converts the enum BBB to a std::string
+ * \param _var The enum value to convert
+ * \returns _var converted to a std::string
+ */
+std::string enum2Str::toStr( BBB _var ) noexcept {
+   switch ( _var ) {
+      case VAL1: return "VAL1";
+      case VAL2: return "VAL2";
+      case VAL3: return "VAL3";
+      default: return "<UNKNOWN>";
+   }
+}
+}
+shareeditflag
+edited Jun 16 at 17:55
+answered Mar 14 at 14:01
+
+Mense
+3516
+  	
+ 		
+wow! Very original and innovative idea :-) I hope you have the courage to upgrade your generator in order to provide a constexpr and noexcept version ;-) I have also just stared your GitHub project ;-) Cheers – olibre Mar 16 at 22:26 
+1	
+ 		
+Updated the generator. The functions will now be always constexpr and enum : <type> is now supported. Thanks for the star :) – Mense Mar 16 at 22:54 
+  	
+ 		
+I meant noexcept of course (not constexpr). – Mense Mar 16 at 23:14
+  	
+ 		
+The link is broken... -.- – yeoman Jun 16 at 12:45
+  	
+ 		
+The link is now fixed. – Mense Jun 16 at 17:56
+
 * fstream
 ** reference
 *** How to read an entire file into memory in C++ - Modern C++ programming, for serious programmers.
@@ -5,8 +612,8 @@ http://cpp.indi.frih.net/blog/2014/09/how-to-read-an-entire-file-into-memory-in-
 
 The solution (general)
 
-This might shock you, but if you want to read a file into a string, by far the best method… is also arguably the simplest. 
-It shouldn’t shock you. It’s just C++ logic that the simplest method should be the best. 
+This might shock you, but if you want to read a file into a string, by far the best method… is also arguably the simplest.
+It shouldn’t shock you. It’s just C++ logic that the simplest method should be the best.
 So, here it is:
 assuming in is a file stream opened in input mode):
 
@@ -19,5 +626,5 @@ You can do it in a single line, if you want:
 auto s = static_cast<std::ostringstream&>(
   std::ostringstream{} << in.rdbuf()).str();
 
-(The cast is unfortunately necessary because the insertion operator returns a ostream&, 
+(The cast is unfortunately necessary because the insertion operator returns a ostream&,
 not a ostringstream&. static_cast is okay because we obviously know the cast is sound.)
