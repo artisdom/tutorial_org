@@ -1,0 +1,23 @@
+* fstream
+** reference
+*** How to read an entire file into memory in C++ - Modern C++ programming, for serious programmers.
+http://cpp.indi.frih.net/blog/2014/09/how-to-read-an-entire-file-into-memory-in-cpp/
+
+The solution (general)
+
+This might shock you, but if you want to read a file into a string, by far the best method… is also arguably the simplest. 
+It shouldn’t shock you. It’s just C++ logic that the simplest method should be the best. 
+So, here it is:
+assuming in is a file stream opened in input mode):
+
+auto ss = std::ostringstream{};
+ss << in.rdbuf();
+auto s = ss.str();
+
+You can do it in a single line, if you want:
+
+auto s = static_cast<std::ostringstream&>(
+  std::ostringstream{} << in.rdbuf()).str();
+
+(The cast is unfortunately necessary because the insertion operator returns a ostream&, 
+not a ostringstream&. static_cast is okay because we obviously know the cast is sound.)
