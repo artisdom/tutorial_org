@@ -1,6 +1,65 @@
 * Regular Expression
 
 ** Reference
+*** Regular Expressions in C++
+http://softwareramblings.com/2008/07/regular-expressions-in-c.html
+
+Regular Expressions in C++
+Up to now, regular expression support in C/C++ programs was achieved using third party or open source regular expression libraries such as the PCRE library. With the addition of regex support to the C++ standard library as part of the C++0x standard update, using regular expressions in C++ programs has become much simpler. This feature is included in the TR1 draft reportwhich has already been implemented in some popular compilers such as gcc and Visual Studio 2008 (as part of service pack 1).
+
+Six regular expression grammars will be supported in C++0x. The default is based upon the ECMAScript grammar specified in ECMA-262. This syntax is based upon the PCRE syntax and is used by languages such as Perl, Python and Ruby which also provide built in regular expression support. Other supported grammars include the POSIX regex syntax, and the syntaxes used in tools such as awk, grep and egrep.
+
+Here are some examples that illustrate how to perform some basic tasks with the new C++ regex component of the standard library.
+
+Header files and namespaces:
+
+#include <regex>
+
+using namespace std::tr1;
+Finding a match:
+
+regex rgx("ello");
+assert(regex_search("Hello World", rgx));
+
+The above example illustrates the construction of a regex object, with the regex pattern being passed as a parameter to the regex constructor. The regex object is a specialization of the basic_regex template for working with regular expressions which are provided using sequences of chars. The regex_search()function template is then used to see if the “Hello world” string contains the “ello” pattern. This function returns true as soon as the first matching substring is found. The regex_search()function is also overloaded to provide versions that take sequence iterators as params (instead of a full string) and also versions that provide additional info on the match results.
+Note: The use of assert() in the examples is used to highlight the “contract” provided by the api – e.g. to highlight if a function can be used in a conditional expression and if the function should return true or false for the particular example.
+
+Finding an exact match:
+The regex_match() function template is an alternative to regex_search() and is used when the target sequence must exactly match the regular expression.
+
+regex rgx("ello");
+assert(regex_match("Hello World", rgx) == false);
+assert(regex_match("ello", rgx));
+
+Finding the position of a match:
+The sub_match or match_results template is used to receive search results from regex_search(). When searching char data, the library provides a ready made specialization of match_results called cmatch.
+
+regex rgx("llo");
+cmatch result;
+regex_search("Hello World", result, rgx);
+cout << "Matched \"" << result.str()
+    << "\" after \"" << result.prefix()
+    << "\" at offset: " << result.position()
+    << " with length: " << result.length()
+    << endl;
+
+
+Working with capture groups:
+Capture groups provide a means for capturing matched regions within a regular expression. Each captured region is represented by a sub_match template object. The smatch specialization of match_results is provided by the library for working with sequences of string sub-matches.
+
+string seq = "foo@helloworld.com";
+regex rgx("(.*)@(.*)");
+smatch result;
+regex_search(seq, result, rgx);
+for(size_t i=0; i<result.size(); ++i)
+{
+    cout << result[i] << endl;
+}
+Case insensitive searches:
+
+regex rgx("ello", regex_constants::icase);
+assert(regex_search("HELLO WORLD", rgx));
+
 *** TR1 regex: capture groups?
 http://stackoverflow.com/questions/6398278/tr1-regex-capture-groups
 
