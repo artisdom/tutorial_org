@@ -1,3 +1,32 @@
+* Regular Expression
+
+** Reference
+*** TR1 regex: capture groups?
+http://stackoverflow.com/questions/6398278/tr1-regex-capture-groups
+
+A:
+
+The C++ TR1 and C++11 regular expression grammars don't support named capture groups. You'll have to do unnamed capture groups.
+
+Also, make sure you don't run into escaping issues. You'll have to escape some characters twice: one for being in a C++ string, and another for being in a regex. The pattern (([^:\r\n]+):\s\s([^\r\n]+)\r\n)+ can be written as a C++ string literal like this:
+
+"([^:\\r\\n]+:\\s\\s([^\\r\\n]+)\\r\\n)+"
+// or in C++11
+R"xxx(([^:\r\n]+:\s\s([^\r\n]+)\r\n)+)xxx"
+Lookbehinds are not supported either. You'll have to work around this limitation by using capture groups: use the pattern (http://)([[:alpha:]]\r\n) and grab only the second capture group.
+
+Q:
+I am using TR1 Regular Expressions (for VS2010) and what I'm trying to do is search for specific pattern for a group called "name", and another pattern for a group called "value". I think what I want is called a capture group, but I'm not sure if that's the right terminology. I want to assign matches to the pattern "[^:\r\n]+):\s" to a list of matches called "name", and matches of the pattern "[^\r\n]+)\r\n)+" to a list of matches called "value".
+
+The regex pattern I have so far is
+
+string pattern = "((?<name>[^:\r\n]+):\s(?<value>[^\r\n]+)\r\n)+";
+But the regex T4R1 header keeps throwing an exception when the program runs. What's wrong with the syntax of the pattern I have? Can someone show an example pattern that would do what I'm trying to accomplish?
+
+Also, how would it be possible to include a substring within the pattern to match, but not actually include that substring in the results? For example, I want to match all strings of the pattern
+
+"http://[[:alpha:]]\r\n", but I don't want to include the substring "http://" in the returned results of matches.
+
 * Enumeration
 ** reference
 
@@ -589,20 +618,20 @@ answered Mar 14 at 14:01
 
 Mense
 3516
-  	
- 		
-wow! Very original and innovative idea :-) I hope you have the courage to upgrade your generator in order to provide a constexpr and noexcept version ;-) I have also just stared your GitHub project ;-) Cheers – olibre Mar 16 at 22:26 
-1	
- 		
-Updated the generator. The functions will now be always constexpr and enum : <type> is now supported. Thanks for the star :) – Mense Mar 16 at 22:54 
-  	
- 		
+
+
+wow! Very original and innovative idea :-) I hope you have the courage to upgrade your generator in order to provide a constexpr and noexcept version ;-) I have also just stared your GitHub project ;-) Cheers – olibre Mar 16 at 22:26
+1
+
+Updated the generator. The functions will now be always constexpr and enum : <type> is now supported. Thanks for the star :) – Mense Mar 16 at 22:54
+
+
 I meant noexcept of course (not constexpr). – Mense Mar 16 at 23:14
-  	
- 		
+
+
 The link is broken... -.- – yeoman Jun 16 at 12:45
-  	
- 		
+
+
 The link is now fixed. – Mense Jun 16 at 17:56
 
 * fstream
